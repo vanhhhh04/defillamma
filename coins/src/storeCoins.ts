@@ -11,8 +11,9 @@ import PromisePool from "@supercharge/promise-pool";
 
 const step = 2000;
 const timeout = process.env.LLAMA_RUN_LOCAL ? 8400000 : 840000; //14mins
-
+console.log("Handler started")
 export default async function handler() {
+  console.log("Handler started")
   process.env.tableName = "prod-coins-table";
   const a = Object.entries(adapters);
   const indexes = Array.from(Array(a.length).keys());
@@ -48,6 +49,7 @@ export default async function handler() {
             resultsWithoutDuplicates.slice(i, i + step),
           );
         }
+        console.log("Writing items:", resultsWithoutDuplicates.length);
         console.log(`${a[i][0]} done`);
       } catch (e) {
         console.error(
@@ -65,4 +67,4 @@ export default async function handler() {
     });
 }
 
-// handler(); // ts-node coins/src/storeCoins.ts
+handler(); // ts-node coins/src/storeCoins.ts

@@ -1,3 +1,4 @@
+useDotenv: true
 service: defillama
 
 package:
@@ -130,6 +131,8 @@ custom:
   certificateArn: ${self:custom.domainMap.${self:custom.stage}.certificateArn}
   hostedZone: ${self:custom.domainMap.${self:custom.stage}.hostedZone}
   logRetentionInDays: 30
+  serverless-offline:
+    port: 4000
 
 functions:
   fallback:

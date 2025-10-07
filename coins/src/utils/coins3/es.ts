@@ -1,7 +1,7 @@
 import * as sdk from "@defillama/sdk";
 import { Client } from "@elastic/elasticsearch";
 import { normalizeCoinId } from "./utils";
-
+console.log(process.env.ELASTICSEARCH_HOST)
 let _client: Client | undefined;
 export function getClient(): Client | undefined {
   if (_client) return _client;
