@@ -22,18 +22,9 @@ export default async function handler() {
     .for(indexes)
     .process(async (i: any) => {
       try {
-        if (
-          ![
-            "",
-            // "uniswap",
-            // "curve",
-            // "curve12",
-            // "sushiswap1",
-            // "unknownTokens",
-          ].includes(a[i][0]) &&
-          !process.env.LLAMA_RUN_LOCAL
-        )
-          return;
+        if (!["uniswap","uniV3","pancakeStable"].includes(a[i][0])) return;
+        console.log(`Running adapter: ${a[i][0]}`);
+
         const results = await withTimeout(timeout, a[i][1][a[i][0]](timestamp));
         const resultsWithoutDuplicates = await filterWritesWithLowConfidence(
           results.flat().filter((c: any) => c.symbol != null || c.SK != 0),
@@ -65,6 +56,6 @@ export default async function handler() {
           );
       }
     });
-}
+      }
 
 handler(); // ts-node coins/src/storeCoins.ts
