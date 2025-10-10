@@ -11,9 +11,8 @@ import PromisePool from "@supercharge/promise-pool";
 
 const step = 2000;
 const timeout = process.env.LLAMA_RUN_LOCAL ? 8400000 : 840000; //14mins
-console.log("Handler started")
+
 export default async function handler() {
-  console.log("Handler started")
   process.env.tableName = "prod-coins-table";
   const a = Object.entries(adapters);
   const indexes = Array.from(Array(a.length).keys());
@@ -22,9 +21,18 @@ export default async function handler() {
     .for(indexes)
     .process(async (i: any) => {
       try {
-        if (!["uniswap","uniV3","pancakeStable"].includes(a[i][0])) return;
-        console.log(`Running adapter: ${a[i][0]}`);
-
+        if (
+          ![
+            "",
+            // "uniswap",
+            // "curve",
+            // "curve12",
+            // "sushiswap1",
+            // "unknownTokens",
+          ].includes(a[i][0]) &&
+          !process.env.LLAMA_RUN_LOCAL
+        )
+          return;
         const results = await withTimeout(timeout, a[i][1][a[i][0]](timestamp));
         const resultsWithoutDuplicates = await filterWritesWithLowConfidence(
           results.flat().filter((c: any) => c.symbol != null || c.SK != 0),
@@ -40,7 +48,6 @@ export default async function handler() {
             resultsWithoutDuplicates.slice(i, i + step),
           );
         }
-        console.log("Writing items:", resultsWithoutDuplicates.length);
         console.log(`${a[i][0]} done`);
       } catch (e) {
         console.error(
@@ -56,6 +63,6 @@ export default async function handler() {
           );
       }
     });
-      }
+}
 
-handler(); // ts-node coins/src/storeCoins.ts
+// handler(); // ts-node coins/src/storeCoins.ts

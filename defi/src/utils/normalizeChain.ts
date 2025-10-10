@@ -4821,6 +4821,9 @@ export const chainCoingeckoIds = {
     twitter: "Somnia_Network",
     url: "https://somnia.network/",
     chainId: 5031,
+    dimensions: {
+      fees: "somnia"
+    }
   },
   "Orderly": {
     geckoId: null,
@@ -4920,10 +4923,49 @@ export const chainCoingeckoIds = {
     symbol: "XPL",
     cmcId: null,
     categories: ["EVM"],
-    twitter: "PlasmaFDN",
+    twitter: "Plasma",
     url: "https://www.plasma.to/",
     github: ["PlasmaLaboratories"],
     chainId: 9745,
+  },
+  "Constellation": {
+    geckoId: "constellation-labs",
+    symbol: "DAG",
+    cmcId: "2868",
+    categories: [],
+    twitter: "Conste11ation",
+    url: "https://constellationnetwork.io/",
+    github: ["Constellation-Labs"],
+  },
+  "Mezo": {
+    geckoId: null,
+    symbol: null,
+    cmcId: null,
+    categories: [],
+    twitter: "MezoNetwork",
+    url: "https://mezo.org",
+    github: ["mezo-org"],
+    chainId: 31612,
+  },
+  "GateLayer": {
+    geckoId: null,
+    symbol: "GT",
+    cmcId: null,
+    categories: ["EVM", "Rollup", "Superchain"],
+    twitter: "gatechain_io",
+    url: "https://gatechain.io/gatelayer",
+    github: ["gatechain"],
+    chainId: 10088,
+  },
+  "Xone Chain": {
+    geckoId: "xoc",
+    symbol: "XOC",
+    cmcId: null,
+    categories: [],
+    twitter: "xone_chain",
+    url: "https://xone.org/",
+    github: ["hello-xone"],
+    chainId: 3721,
   },
 } as unknown as ChainCoinGekcoIds
 
@@ -5138,7 +5180,9 @@ const chainLabelMap = {
   "camp": "Camp",
   "off_chain": "Off Chain",
   "zklighter": "zkLighter",
-  "goat": "Goat"
+  "goat": "Goat",
+  "gatelayer": "GateLayer",
+  "xone": "Xone Chain"
 } as { [key: string]: string }
 
 // When we decide to change the display name of a chain, we add the mapping for the new name here

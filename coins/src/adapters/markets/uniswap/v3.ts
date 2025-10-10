@@ -28,8 +28,6 @@ const dollarAmt = 10 ** 5;
 
 const quoters: { [chain: string]: string } = {
   ethereum: "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
-  bsc: "0x78D78E420Da98ad378D7799bE8f4AF69033EB077",
-
 };
 
 async function estimateValuesAndFetchMetadata(
@@ -42,13 +40,15 @@ async function estimateValuesAndFetchMetadata(
     .map((t: Tokens) =>
       fees.map((f: string) => ({
         target: quoters[chain],
-        params: [{
-          tokenIn: t.out.toLowerCase(),
-          tokenOut: t.in.toLowerCase(),
-          fee: Number(f),
-          amountIn: sdk.util.convertToBigInt(1e6).toString(),
-          sqrtPriceLimitX96,
-        }],
+        params: [
+          [
+            t.out.toLowerCase(),
+            t.in.toLowerCase(),
+            sdk.util.convertToBigInt(1e6).toString(),
+            f,
+            sqrtPriceLimitX96,
+          ],
+        ],
       })),
     )
     .flat();
@@ -84,10 +84,9 @@ async function estimateValuesAndFetchMetadata(
       permitFailure: true,
     }).then((res: any) =>
       res.output.map((r: any) => {
-        const token = r.input.params[0].tokenOut;
+        const token = r.input.params[0][1];
         if (
           r.output &&
-          data[token] &&
           data[token].rawQty != undefined &&
           r.output.amountOut > data[token].rawQty
         )
@@ -138,25 +137,29 @@ function createMainQuoterCalls(chain: any, data: Data): Call[] {
         ...[
           {
             target: quoters[chain],
-            params: [{
-              tokenIn: t,
-              tokenOut: data[t].out,
-              fee: Number(f),
-              amountIn: sdk.util.convertToBigInt(largeQty).toString(),
-              sqrtPriceLimitX96,
-            }],
+            params: [
+              [
+                t,
+                data[t].out,
+                sdk.util.convertToBigInt(largeQty).toString(),
+                sdk.util.convertToBigInt(f).toString(),
+                sqrtPriceLimitX96,
+              ],
+            ],
           },
           {
             target: quoters[chain],
-            params: [{
-              tokenIn: t,
-              tokenOut: data[t].out,
-              fee: Number(f),
-              amountIn: sdk.util
-                .convertToBigInt(Number(+largeQty / dollarAmt).toFixed(0))
-                .toString(),
-              sqrtPriceLimitX96,
-            }],
+            params: [
+              [
+                t,
+                data[t].out,
+                sdk.util
+                  .convertToBigInt(Number(+largeQty / dollarAmt).toFixed(0))
+                  .toString(),
+                f,
+                sqrtPriceLimitX96,
+              ],
+            ],
           },
         ],
       );
@@ -181,25 +184,15 @@ async function fetchSwapQuotes(
     permitFailure: true,
   }).then((res: any) =>
     res.output.map((r: any, i: number) => {
-      const token = r.input.params[0].tokenIn;
-      if (!r.output || !data[token] || !data[token].out || !data[data[token].out]) {
-        console.warn(`Skipping rate calculation for token ${token}: missing output or data`);
-        return;
-      }
-      if (!r.output.amountOut || r.output.amountOut === 0) {
-        console.warn(`Skipping rate calculation for token ${token}: amountOut is zero or undefined`);
-        return;
-      }
-      const amountIn = r.input.params[0].amountIn;
-      const decimalsDiff = data[token].decimals - data[data[token].out].decimals;
-      const denominator = r.output.amountOut * 10 ** decimalsDiff;
-      if (!denominator) {
-        console.warn(`Skipping rate calculation for token ${token}: denominator is zero`);
-        return;
-      }
-      const rate = Number(amountIn) / denominator;
+      const token = r.input.params[0][0];
+      let a = data[token];
+      if (!r.output) return;
+      const rate =
+        r.input.params[0][2].toString() /
+        (r.output.amountOut *
+          10 ** (data[token].decimals - data[data[token].out].decimals));
       if (i % 2 == 0) {
-        if (r.output.amountOut > data[token].largeRate)
+        if (i % 2 == 0 && r.output.amountOut > data[token].largeRate)
           data[token].largeRate = rate;
       } else if (r.output.amountOut > data[token].smallRate)
         data[token].smallRate = rate;
@@ -211,43 +204,45 @@ async function findPricesThroughV3(
   tokens: Tokens[],
   timestamp: number,
 ) {
-  try {
-    const block = await getBlock(chain, timestamp);
-    const data = await estimateValuesAndFetchMetadata(chain, tokens, block);
-    Object.keys(data).map((a: string) => {
-      data[a].priceEstimate = 10 ** data[a].decimals / data[a].rawQty;
-    });
-    const calls: Call[] = createMainQuoterCalls(chain, data);
-    await fetchSwapQuotes(chain, calls, data, block);
-    const writes: Write[] = [];
-    Object.keys(data).map((t: string) => {
-      const tokenData = data[t];
-      if (
-        Object.values(tokenData).includes("") ||
-        Object.values(tokenData).includes(-1)
-      )
-        return;
-      const confidence = Math.min(
-        tokenData.largeRate / tokenData.smallRate,
-        0.989,
-      );
-      addToDBWritesList(
-        writes,
-        chain,
-        t,
-        tokenData.smallRate,
-        tokenData.decimals,
-        tokenData.symbol,
-        timestamp,
-        "univ3",
-        confidence,
-      );
-    });
-    return writes;
-  } catch (err) {
-    console.error(`findPricesThroughV3 failed for chain ${chain}:`, err);
-    throw err;
-  }
+  const block = await getBlock(chain, timestamp);
+
+  const data = await estimateValuesAndFetchMetadata(chain, tokens, block);
+  Object.keys(data).map((a: string) => {
+    data[a].priceEstimate = 10 ** data[a].decimals / data[a].rawQty;
+  });
+
+  const calls: Call[] = createMainQuoterCalls(chain, data);
+
+  await fetchSwapQuotes(chain, calls, data, block);
+  const writes: Write[] = [];
+
+  Object.keys(data).map((t: string) => {
+    const tokenData = data[t];
+    if (
+      Object.values(tokenData).includes("") ||
+      Object.values(tokenData).includes(-1)
+    )
+      return;
+
+    const confidence = Math.min(
+      tokenData.largeRate / tokenData.smallRate,
+      0.989,
+    );
+
+    addToDBWritesList(
+      writes,
+      chain,
+      t,
+      tokenData.smallRate,
+      tokenData.decimals,
+      tokenData.symbol,
+      timestamp,
+      "univ3",
+      confidence,
+    );
+  });
+
+  return writes;
 }
 export function uniV3(timestamp: number = 0) {
   return Promise.all([
@@ -260,25 +255,6 @@ export function uniV3(timestamp: number = 0) {
         },
       ],
       timestamp,
-    ).catch((err) => {
-      console.error("uniV3 ethereum failed:", err);
-      throw err;
-    }),
-    findPricesThroughV3(
-      "bsc",
-      [
-        {
-          in: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-          out: "0x55d398326f99059fF775485246999027B3197955",
-        },
-      ],
-      timestamp,
-    ).catch((err) => {
-      console.error("uniV3 bsc failed:", err);
-      throw err;
-    }),
-  ]).catch((err) => {
-    console.error("uniV3 adapter failed:", err);
-    throw err;
-  });
+    ),
+  ]);
 }
