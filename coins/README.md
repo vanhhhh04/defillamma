@@ -38,6 +38,44 @@ $AWS dynamodb create-table \
   --key-schema AttributeName=PK,KeyType=HASH AttributeName=SK,KeyType=RANGE \
   --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
 $AWS dynamodb list-tables
+docker run --rm --network host \
+  -e AWS_ACCESS_KEY_ID=fakeid \
+  -e AWS_SECRET_ACCESS_KEY=fakesecret \
+  amazon/aws-cli dynamodb create-table \
+  --table-name prod-coins-table \
+  --attribute-definitions AttributeName=PK,AttributeType=S AttributeName=SK,AttributeType=N \
+  --key-schema AttributeName=PK,KeyType=HASH AttributeName=SK,KeyType=RANGE \
+  --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+  --endpoint-url http://localhost:8000 \
+  --region us-east-1
+
+An error occurred (ResourceInUseException) when calling the CreateTable operation: Cannot create preexisting table
+anhcao_phoenixunity@MacBook-Pro-cua-Anhcao-phoenixunity ~ % docker run --rm --network host \
+  -e AWS_ACCESS_KEY_ID=fakeid \
+  -e AWS_SECRET_ACCESS_KEY=fakesecret \
+  amazon/aws-cli dynamodb list-tables \
+  --endpoint-url http://localhost:8000 \
+  --region us-east-1
+{
+    "TableNames": [
+        "prod-coins-table"
+    ]
+}
+anhcao_phoenixunity@MacBook-Pro-cua-Anhcao-phoenixunity ~ % docker run --rm --network host \
+  -e AWS_ACCESS_KEY_ID=fakeid \
+  -e AWS_SECRET_ACCESS_KEY=fakesecret \
+  amazon/aws-cli dynamodb scan \
+  --table-name prod-coins-table \
+  --region us-east-1 \
+  --endpoint-url http://localhost:8000 \
+  --output table
+-----------------------------------------------
+|                    Scan                     |
++-------------------+--------+----------------+
+| ConsumedCapacity  | Count  | ScannedCount   |
++-------------------+--------+----------------+
+|  None             |  0     |  0             |
++-------------------+--------+----------------+
 
 
 

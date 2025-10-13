@@ -5,6 +5,9 @@ Silo (./moneyMarkets/silo)
 dForce (./moneyMarkets/dforce)
 Folks Finance (./moneyMarkets/folks-finance)
 Capyfi (./moneyMarkets/capyfi)
+
+
+
 Decentralized Exchanges (DEXs)
 Uniswap (./markets/uniswap, ./markets/uniswap/v3)
 Curve (./markets/curve)
@@ -29,11 +32,15 @@ Mean Finance (./yield/mean-finance)
 Level Finance (./yield/level-finance)
 Harvest (./yield/harvest)
 Yield Yak (./yield/yield-yak)
+
+
 Liquid Staking
 Ankr (./liquidStaking/ankr)
 pxETH (./liquidStaking/pxeth)
 sthApt (./liquidStaking/sthapt)
 truAPT (./liquidStaking/truapt)
+
+
 Bridges
 Hop (./markets/hop)
 Stargate (./markets/stargate)
@@ -389,3 +396,126 @@ f. Calculate confidence and write price data to the database
 For each token, calculates a confidence score (how much the price changes between small and large swaps).
 Calls addToDBWritesList to prepare a write object with the price, decimals, symbol, timestamp, source, and confidence.
 Why?: This finalizes the price and confidence for CAKE/USDT and prepares it for storage in your database, so it can be used by other systems or shown to users.
+
+
+
+
+pancakestable adapter!
+Certainly! Here’s how each step in the pancakeStable adapter works, specifically for getting the price of CAKE (if it is part of a stable pool) on BSC in PancakeSwap:
+
+1. Factory Setup
+The adapter knows the PancakeSwap StableSwap factory contract address on BSC.
+This contract emits events whenever a new stable pool (e.g., CAKE/USDT/USDC) is created.
+detect all stable pools created by the PancakeSwap StableSwap factory on BSC
+
+
+2. Get Current Block and API
+The adapter gets the current timestamp (or uses the one you provide).
+It initializes the api object, which is used to make all on-chain calls at the correct block.
+The api object is a helper that lets you make on-chain calls (like reading logs, balances, supplies) as of a specific block.
+This ensures all the data you fetch (pool balances, supplies, etc.) is from the same point in time (the same block), which is critical for accurate price calculations.
+Why is this important?
+Blockchain data changes with every block.
+If you want a consistent snapshot of all pool balances and supplies, you must query them at the same block.
+The api object abstracts away the details of finding the right block for your timestamp and making all calls at that block.
+
+
+3. Fetch All StableSwap Pools
+The adapter fetches all NewStableSwapPair events from the factory contract.
+Each event gives you the addresses of the pool contract, tokenA, tokenB, tokenC (optional), and the LP token.
+If CAKE is in any of these pools (as tokenA, tokenB, or tokenC), it will be included in the next steps.
+This step automatically finds every stable pool that exists on PancakeSwap, including any new pools that have been created since the last run.
+If CAKE is present as tokenA, tokenB, or tokenC in any pool, that pool will be included in the next steps for price calculation.
+
+4. Fetch On-Chain Data for Each Pool
+For each pool, the adapter fetches:
+The balance of tokenA, tokenB, and tokenC in the pool contract.
+The total supply and decimals of the LP token.
+This is done using efficient batch calls (multiCall).
+For every stable pool found in the previous step, fetch all the on-chain data needed to calculate the value of the pool and its LP token.
+For each pool (deploy), you have:
+
+log.args[0]: The pool contract address (swapContract)
+log.args[1]: tokenA address
+log.args[2]: tokenB address
+log.args[3]: tokenC address (may be the null address if the pool only has two tokens)
+log.args[4]: LP token address
+The code uses api.multiCall to batch many on-chain calls into a single request for efficiency.
+
+Specifically, it fetches:
+
+The balance of tokenA in the pool contract (balanceOf(pool) for tokenA)
+The balance of tokenB in the pool contract (balanceOf(pool) for tokenB)
+The balance of tokenC in the pool contract (balanceOf(pool) for tokenC, if present)
+The total supply of the LP token (totalSupply() for the LP token)
+The decimals of the LP token (decimals() for the LP token)
+
+
+5. Fetch Token Prices
+The adapter calls getTokenAndRedirectDataMap to get the USD price and decimals for all tokens in all pools (including CAKE if present).
+This uses oracles or price feeds (e.g., Coingecko, Chainlink).
+For every pool, you extract the addresses of tokenA, tokenB, and tokenC.
+You flatten all these addresses into a single list (so you have every token in every pool).
+You call getTokenAndRedirectDataMap with this list, the chain, and the timestamp.
+What does getTokenAndRedirectDataMap do?
+
+It queries price oracles (like Coingecko, Chainlink, or internal price feeds) to get the current USD price and decimals for each token address.
+It returns a mapping:
+{ [tokenAddress]: { price: <usd price>, decimals: <decimals>, ... } }
+If CAKE is present in any pool, you’ll get its USD price and decimals in this mapping.
+Why is this important?
+You need the USD price of each token to calculate the total USD value of the pool (AUM).
+Decimals are needed to convert raw on-chain balances to human-readable numbers.
+Without this step, you can’t value the pool or its LP token in USD.
+
+6. Calculate AUM (Assets Under Management)
+For each pool, the adapter calculates the total USD value of all tokens in the pool:
+For each token (including CAKE if present), multiplies its balance by its USD price, divided by its decimals.
+Sums the values for all tokens in the pool.
+Token Discovery:
+For each pool, the adapter gets the addresses of up to three tokens (tokenA, tokenB, tokenC). CAKE will be included if it is one of these tokens.
+
+Balance Fetching:
+The adapter uses multicall to fetch the on-chain balance of each token in the pool contract.
+
+balancesA[i] is the balance of tokenA in pool i
+balancesB[i] is the balance of tokenB in pool i
+balancesC[i] is the balance of tokenC in pool i (may be zero or null if not present)
+Price Fetching:
+The adapter calls getTokenAndRedirectDataMap to get the USD price and decimals for each token, using their addresses.
+
+AUM Calculation (the core step):
+For each pool, the code does:
+
+For each token, it calls getAum(address, balance).
+getAum looks up the token’s price and decimals, and computes:
+This converts the raw on-chain balance to a human-readable amount, then multiplies by the USD price to get the USD value for that token in the pool.
+It sums the USD values for all tokens in the pool to get the total AUM.
+Special Handling:
+
+If a token is not present (e.g., tokenC is the null address), it skips or sets its value to zero.
+Example (with CAKE in the pool)
+Suppose a pool contains CAKE, USDT, and BUSD:
+
+The adapter fetches the balances of CAKE, USDT, and BUSD in the pool contract.
+It fetches the USD price and decimals for each token.
+For each token:
+Converts the raw balance to the real amount (using decimals)
+Multiplies by the USD price
+Sums the USD values for CAKE, USDT, and BUSD to get the pool’s total AUM.
+Why is this important?
+The AUM is used to calculate the price of the pool’s LP token (total AUM divided by total LP supply).
+This ensures the LP token price reflects the real, up-to-date USD value of all assets in the pool, including CAKE if presen
+
+7. Calculate LP Token Price
+The adapter divides the total AUM by the total supply of LP tokens (normalized by decimals) to get the price per LP token.
+This is the price of the LP token, not CAKE directly.
+This price is for the LP token, not for CAKE directly.
+If you hold 10 LP tokens, and each is worth $10, your share of the pool is $100.
+The LP token price changes as the pool’s AUM or total supply changes (e.g., due to swaps, deposits, withdrawals, or price changes of underlying tokens).
+This step ensures that anyone holding LP tokens can know their current USD value, which is essential for DeFi transparency
+
+
+8. Write Results
+The adapter prepares a write object for each LP token, including its price, decimals, symbol, timestamp, and confidence.
+These are written to the database.

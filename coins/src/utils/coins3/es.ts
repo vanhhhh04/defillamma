@@ -138,7 +138,7 @@ async function fetchAllRecords(index: string): Promise<MetadataRecord[]> {
       query: {
         match_all: {},
       },
-      size: 100000,
+      size: 10000,
     },
   });
 
