@@ -1,4 +1,4 @@
-import { queryPostgresWithRetry } from "../../src/utils/shared/bridgedTvlPostgres";
+import { queryPostgresWithRetry } from "../utils/shared/bridgedTvlPostgres";
 import { getPgConnection } from "../utils/shared/getDBConnection";
 import { sendMessage } from "../utils/discord";
 import { searchWidth } from "../utils/shared/constants";
@@ -114,7 +114,7 @@ export async function notifyStaleCoins() {
     message += `\nIn ${timeout - d.latency}h a ${d.protocol} TVL chart will lose ${readableTvl}$ (${
       d.percentage
     }%) because ${d.key} is ${d.latency}h stale`;
-    if (d.usd_amount > 1e8 && timeout - d.latency < 7) {
+    if (d.usd_amount > 1e8 && timeout - d.latency < 13) {
       teamMessage += `\nIn ${timeout - d.latency}h a ${d.protocol} TVL chart will lose ${readableTvl}$ (${
         d.percentage
       }%) because ${d.key} is ${d.latency}h stale`;
