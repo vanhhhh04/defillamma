@@ -11,13 +11,13 @@ import { getDisplayChainNameCached, normalizeDimensionChainsMap, } from "../../a
 import { parentProtocolsById } from "../../protocols/parentProtocols";
 import { protocolsById } from "../../protocols/data";
 
-import { RUN_TYPE, roundVaules, } from "../utils";
+import { RUN_TYPE, roundVaules, runWithRuntimeLogging, cronNotifyOnDiscord } from "../utils";
 import * as sdk from '@defillama/sdk'
 
 import { getOverviewProcess2, getProtocolDataHandler2 } from "../routes/dimensions"
 import { storeRouteData } from "../cache/file-cache"
 import { sluggifyString } from "../../utils/sluggify"
-import { storeAppMetadata } from './appMetadata';
+// import { storeAppMetadata } from './appMetadata';
 import { sendMessage } from '../../utils/discord';
 import { ProtocolAdaptor, AdaptorRecordType, ACCOMULATIVE_ADAPTOR_TYPE, getAdapterRecordTypes, ADAPTER_TYPES, } from '../../adaptors/data/types';
 
@@ -189,7 +189,7 @@ async function run() {
 
     console.time(timeKey1)
     let { protocolMap: dimensionProtocolMap } = loadAdaptorsData(adapterType)
-    console.timeEnd(timeKey1)
+    // console.timeEnd(timeKey1)
 
     const adapterData = allCache[adapterType]
     const timeKey3 = `summary ${adapterType}`
@@ -235,7 +235,7 @@ async function run() {
     adapterData.summaries = summaries
     adapterData.allChains = Object.keys(chainMappingToVal).sort((a, b) => chainMappingToVal[b] - chainMappingToVal[a])
     adapterData.lastUpdated = getUnixTimeNow()
-    console.timeEnd(timeKey3)
+    // console.timeEnd(timeKey3)
 
     function addProtocolData({ protocolId, dimensionProtocolInfo = ({} as any), isParentProtocol = false, adapterType, skipChainSummary = false, records, hasAppMetrics = false, }: { isParentProtocol: boolean, adapterType: AdapterType, skipChainSummary: boolean, records?: any, protocolId: string, dimensionProtocolInfo?: ProtocolAdaptor, hasAppMetrics?: boolean }) {
       if (isParentProtocol) skipChainSummary = true
@@ -262,7 +262,7 @@ async function run() {
       const protocolData: any = {}
       protocol.summaries = {} as any
       protocol.info = { ...(tvlProtocolInfo ?? {}), };
-      protocol.misc = {      };
+      protocol.misc = {};
       const infoKeys = ['name', 'defillamaId', 'displayName', 'module', 'category', 'logo', 'chains', 'methodologyURL', 'methodology', 'gecko_id', 'forkedFrom', 'twitter', 'audits', 'description', 'address', 'url', 'audit_links', 'cmcId', 'id', 'github', 'governanceID', 'treasury', 'parentProtocol', 'previousNames', 'hallmarks', 'defaultChartView', 'doublecounted']
 
       infoKeys.forEach(key => protocol.info[key] = (info as any)[key] ?? protocol.info[key] ?? null)
@@ -489,10 +489,10 @@ async function run() {
         });
         // monthlyAverage1y
         protocolSummaryAction(protocolSummary, (summary: any) => {
-        if (summary.total1y && _protocolData.lastOneYearData?.length >= 30) {
+          if (summary.total1y && _protocolData.lastOneYearData?.length >= 30) {
             summary.monthlyAverage1y = (summary.total1y / _protocolData.lastOneYearData.length) * 30.44
-        }
-      });
+          }
+        });
         // change_1d
         protocolSummaryAction(protocolSummary, (summary: any) => {
           if (typeof summary.total24h === 'number' && typeof summary.total48hto24h === 'number' && summary.total48hto24h !== 0)
@@ -726,15 +726,22 @@ type ProtocolSummary = RecordSummary & {
   breakdown30d?: any
 }
 
-run()
-  .catch(console.error)
-  .then(storeAppMetadata)
+runWithRuntimeLogging(run, {
+  application: 'cron-task',
+  type: 'dimensions',
+})
+  // .then(storeAppMetadata)
+  .catch(async e => {
+    console.error(e)
+    const errorMessage = (e as any)?.message ?? (e as any)?.stack ?? JSON.stringify(e)
+    await sendMessage(errorMessage, process.env.DIM_CHANNEL_WEBHOOK!)
+  })
   .then(() => process.exit(0))
 
 const spikeRecords = [] as any[]
 const invalidDataRecords = [] as any[]
 
-const NOTIFY_ON_DISCORD = process.env.DIM_CRON_NOTIFY_ON_DISCORD === 'true'
+const NOTIFY_ON_DISCORD = cronNotifyOnDiscord()
 const ThreeMonthsAgo = (Date.now() / 1000) - 3 * 30 * 24 * 60 * 60
 const isLessThanThreeMonthsAgo = (timeS: string) => timeSToUnix(timeS) > ThreeMonthsAgo
 
@@ -757,7 +764,7 @@ function getProtocolRecordMapWithMissingData({ records, info = {}, adapterType, 
     }
     const dataKeys = Object.keys(record.aggregated ?? {}).filter(key => ACCOMULATIVE_ADAPTOR_TYPE[key]) // we care about only base keys
     const values = dataKeys.map(key => record.aggregated?.[key]?.value ?? 0)
-    const improbableValue = 5e10 // 50 billion
+    const improbableValue = 2e11 // 200 billion
     if (values.some((i: any) => i > improbableValue)) {
       if (NOTIFY_ON_DISCORD)
         invalidDataRecords.push([adapterType, metadata?.id, info?.name, timeS, values.find((i: any) => i > improbableValue)].map(i => i + ' ').join(' '))
@@ -781,7 +788,7 @@ function getProtocolRecordMapWithMissingData({ records, info = {}, adapterType, 
             case 'dv':
             case 'dnv': currentValueisHigh = currentValue > 3e8; break; // 300 million
           }
-          let spikeRatio = currentValueisHigh ? 3 : 10
+          let spikeRatio = currentValueisHigh ? 5 : 10
           isSpike = currentValue > spikeRatio * highestCloseValue
         }
 
@@ -969,7 +976,7 @@ async function generateDimensionsResponseFiles(cache: any) {
       }
     }
 
-    console.timeEnd(timeKey)
+    // console.timeEnd(timeKey)
   }
   await storeRouteData(`dimensions/chain-agg-data`, dimChainsAggData)
 }

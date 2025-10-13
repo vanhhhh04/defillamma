@@ -1,4 +1,3 @@
-useDotenv: true
 service: defillama
 
 package:
@@ -131,8 +130,6 @@ custom:
   certificateArn: ${self:custom.domainMap.${self:custom.stage}.certificateArn}
   hostedZone: ${self:custom.domainMap.${self:custom.stage}.hostedZone}
   logRetentionInDays: 30
-  serverless-offline:
-    port: 4000
 
 functions:
   fallback:
@@ -339,12 +336,12 @@ functions:
   #     - http:
   #         path: chains2/{category}
   #         method: get
-  inflows:
-    handler: src/getInflows.default
-    events:
-      - http:
-          path: inflows/{protocol}/{timestamp}
-          method: get
+  # inflows:  # moved to api2
+  #   handler: src/getInflows.default
+  #   events:
+  #     - http:
+  #         path: inflows/{protocol}/{timestamp}
+  #         method: get
   # langs:  # moved to api2
   #   handler: src/storeLangs.default
   #   timeout: 60
